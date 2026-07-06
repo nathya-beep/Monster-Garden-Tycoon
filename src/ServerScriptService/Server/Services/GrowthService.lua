@@ -7,6 +7,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Crops = require(ReplicatedStorage.Shared.Config.Crops)
+local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local Monetization = require(ReplicatedStorage.Shared.Config.Monetization)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -32,37 +34,64 @@ export type PlayerStateView = {
 	Coins: number,
 	Inventory: { [string]: number },
 	HasPlot: boolean,
-	Plot: PlotStateView?,
+	MaxPlotSlots: number,
+	Plots: { [number]: PlotStateView }, -- slot index -> estado; slot vacío = ausente
 }
 
 local GrowthService = {}
 
--- Snapshot de solo lectura del estado de la parcela, para que la UI del
--- cliente sepa si está vacía, creciendo (con cuenta regresiva) o lista.
-function GrowthService.GetPlotState(player: Player): PlotStateView?
+-- Cantidad de slots de plantado del jugador: la base más el bonus del
+-- gamepass "ExtraPlotSlots" si lo tiene. Único lugar donde vive esta cuenta.
+function GrowthService.GetMaxPlotSlots(player: Player): number
+	local bonus = 0
+	if MonetizationService.HasGamePass(player, "ExtraPlotSlots") then
+		bonus = Monetization.GamePasses.ExtraPlotSlots.BonusSlots or 0
+	end
+	return Economy.BASE_PLOT_SLOTS + bonus
+end
+
+-- Segundos de crecimiento reales para este jugador: la mitad para dueños
+-- del gamepass "DoubleGrowthSpeed". Único lugar donde vive esta cuenta para
+-- que GetSlotState (cuenta regresiva de la UI) y handleHarvest (validación
+-- de "todavía no está lista") nunca puedan desincronizarse entre sí.
+local function getEffectiveGrowSeconds(player: Player, crop: Crops.CropDefinition): number
+	if MonetizationService.HasGamePass(player, "DoubleGrowthSpeed") then
+		return crop.GrowSeconds / 2
+	end
+	return crop.GrowSeconds
+end
+
+-- Snapshot de solo lectura del estado del slot `slotIndex`, para que la UI
+-- del cliente sepa si está vacío, creciendo (con cuenta regresiva) o listo.
+function GrowthService.GetSlotState(player: Player, slotIndex: number): PlotStateView?
 	local data = DataService.Get(player)
-	if not data or not data.Plot then
+	if not data then
 		return nil
 	end
 
-	local plantedCrop = data.Plot
+	local plantedCrop = data.Plots[slotIndex]
+	if not plantedCrop then
+		return nil
+	end
+
 	local crop = Crops[plantedCrop.SeedId]
 	if not crop then
 		return nil
 	end
 
+	local effectiveGrowSeconds = getEffectiveGrowSeconds(player, crop)
 	local elapsedSeconds = os.time() - plantedCrop.PlantedAt
-	local remainingSeconds = math.max(crop.GrowSeconds - elapsedSeconds, 0)
+	local remainingSeconds = math.max(effectiveGrowSeconds - elapsedSeconds, 0)
 
 	return {
 		SeedId = plantedCrop.SeedId,
-		GrowSeconds = crop.GrowSeconds,
+		GrowSeconds = effectiveGrowSeconds,
 		RemainingSeconds = remainingSeconds,
 		IsReady = remainingSeconds <= 0,
 	}
 end
 
-local function handlePlantSeed(player: Player, seedId: string): ActionResult
+local function handlePlantSeed(player: Player, seedId: string, slotIndex: number): ActionResult
 	local crop = Crops[seedId]
 	if not crop then
 		return { Success = false, Reason = "SeedNotFound" }
@@ -77,7 +106,11 @@ local function handlePlantSeed(player: Player, seedId: string): ActionResult
 		return { Success = false, Reason = "DataNotLoaded" }
 	end
 
-	if data.Plot ~= nil then
+	if slotIndex < 1 or slotIndex > GrowthService.GetMaxPlotSlots(player) then
+		return { Success = false, Reason = "InvalidSlot" }
+	end
+
+	if data.Plots[slotIndex] ~= nil then
 		return { Success = false, Reason = "PlotOccupied" }
 	end
 
@@ -86,18 +119,22 @@ local function handlePlantSeed(player: Player, seedId: string): ActionResult
 	end
 
 	InventoryService.RemoveItem(player, seedId, 1)
-	data.Plot = { SeedId = seedId, PlantedAt = os.time() }
+	data.Plots[slotIndex] = { SeedId = seedId, PlantedAt = os.time() }
 
 	return { Success = true }
 end
 
-local function handleHarvest(player: Player): ActionResult
+local function handleHarvest(player: Player, slotIndex: number): ActionResult
 	local data = DataService.Get(player)
 	if not data then
 		return { Success = false, Reason = "DataNotLoaded" }
 	end
 
-	local plantedCrop = data.Plot
+	if slotIndex < 1 or slotIndex > GrowthService.GetMaxPlotSlots(player) then
+		return { Success = false, Reason = "InvalidSlot" }
+	end
+
+	local plantedCrop = data.Plots[slotIndex]
 	if not plantedCrop then
 		return { Success = false, Reason = "PlotEmpty" }
 	end
@@ -105,12 +142,12 @@ local function handleHarvest(player: Player): ActionResult
 	local crop = Crops[plantedCrop.SeedId]
 	if not crop then
 		-- Config borrada/renombrada después de que alguien ya la plantó.
-		data.Plot = nil
+		data.Plots[slotIndex] = nil
 		return { Success = false, Reason = "SeedNotFound" }
 	end
 
 	local elapsedSeconds = os.time() - plantedCrop.PlantedAt
-	if elapsedSeconds < crop.GrowSeconds then
+	if elapsedSeconds < getEffectiveGrowSeconds(player, crop) then
 		return { Success = false, Reason = "NotReady" }
 	end
 
@@ -119,16 +156,21 @@ local function handleHarvest(player: Player): ActionResult
 		reward *= 2
 	end
 
-	data.Plot = nil
+	if MonetizationService.HasGamePass(player, "VipGarden") then
+		local bonusPercent = Monetization.GamePasses.VipGarden.CoinBonusPercent or 0
+		reward += math.floor(reward * bonusPercent / 100)
+	end
+
+	data.Plots[slotIndex] = nil
 	EconomyService.AddCoins(player, reward)
 
 	return { Success = true }
 end
 
 -- Cosecha automática para dueños del gamepass "AutoCollect": revisa
--- periódicamente si la parcela del jugador está lista y la cosecha sola,
--- reusando la misma validación que el harvest manual (nunca asume que la
--- parcela sigue lista al momento de ejecutar).
+-- periódicamente cada slot del jugador y cosecha los que estén listos,
+-- reusando la misma validación que el harvest manual (nunca asume que un
+-- slot sigue listo al momento de ejecutar).
 local function startAutoCollectLoop(player: Player)
 	task.spawn(function()
 		while player.Parent do
@@ -138,7 +180,12 @@ local function startAutoCollectLoop(player: Player)
 			end
 
 			if MonetizationService.HasGamePass(player, "AutoCollect") then
-				pcall(handleHarvest, player)
+				for slotIndex = 1, GrowthService.GetMaxPlotSlots(player) do
+					local state = GrowthService.GetSlotState(player, slotIndex)
+					if state and state.IsReady then
+						pcall(handleHarvest, player, slotIndex)
+					end
+				end
 			end
 		end
 	end)
@@ -150,11 +197,21 @@ local function handleGetPlayerState(player: Player): PlayerStateView?
 		return nil
 	end
 
+	local maxSlots = GrowthService.GetMaxPlotSlots(player)
+	local plots: { [number]: PlotStateView } = {}
+	for slotIndex = 1, maxSlots do
+		local state = GrowthService.GetSlotState(player, slotIndex)
+		if state then
+			plots[slotIndex] = state
+		end
+	end
+
 	return {
 		Coins = data.Coins,
 		Inventory = InventoryService.GetSnapshot(player),
 		HasPlot = PlotService.GetPlot(player) ~= nil,
-		Plot = GrowthService.GetPlotState(player),
+		MaxPlotSlots = maxSlots,
+		Plots = plots,
 	}
 end
 
@@ -163,12 +220,12 @@ function GrowthService.Init()
 	local harvestRemote = Remotes.GetHarvestRemote()
 	local getPlayerStateRemote = Remotes.GetPlayerStateRemote()
 
-	plantSeedRemote.OnServerInvoke = function(player: Player, seedId: string)
-		if typeof(seedId) ~= "string" then
+	plantSeedRemote.OnServerInvoke = function(player: Player, seedId: string, slotIndex: number)
+		if typeof(seedId) ~= "string" or typeof(slotIndex) ~= "number" then
 			return { Success = false, Reason = "InvalidRequest" }
 		end
 
-		local ok, result = pcall(handlePlantSeed, player, seedId)
+		local ok, result = pcall(handlePlantSeed, player, seedId, slotIndex)
 		if not ok then
 			warn(("[GrowthService] Error procesando PlantSeed de %s: %s"):format(player.Name, tostring(result)))
 			return { Success = false, Reason = "ServerError" }
@@ -177,8 +234,12 @@ function GrowthService.Init()
 		return result
 	end
 
-	harvestRemote.OnServerInvoke = function(player: Player)
-		local ok, result = pcall(handleHarvest, player)
+	harvestRemote.OnServerInvoke = function(player: Player, slotIndex: number)
+		if typeof(slotIndex) ~= "number" then
+			return { Success = false, Reason = "InvalidRequest" }
+		end
+
+		local ok, result = pcall(handleHarvest, player, slotIndex)
 		if not ok then
 			warn(("[GrowthService] Error procesando Harvest de %s: %s"):format(player.Name, tostring(result)))
 			return { Success = false, Reason = "ServerError" }

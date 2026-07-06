@@ -8,4 +8,7 @@ Economy.STARTING_COINS = 100
 -- Cada cuántos segundos se autoguardan los datos del jugador mientras está conectado.
 Economy.AUTOSAVE_INTERVAL_SECONDS = 300 -- 5 minutos
 
+-- Slots de plantado que tiene todo jugador sin el gamepass ExtraPlotSlots.
+Economy.BASE_PLOT_SLOTS = 1
+
 return Economy

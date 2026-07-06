@@ -1,5 +1,5 @@
 -- Client.client.lua
--- UI básica del jugador: coins, inventario, tienda y estado de la parcela.
+-- UI básica del jugador: coins, inventario, tienda y estado de las parcelas.
 -- Construida por código (no hay assets de UI en StarterGui todavía).
 -- Toda la lógica de negocio vive en el servidor; este script solo dispara
 -- los remotes y refleja lo que el servidor le devuelve.
@@ -22,15 +22,23 @@ local BASIC_SEED_ID = "BasicSeed"
 local POLL_INTERVAL_SECONDS = 2
 local STATUS_MESSAGE_SECONDS = 2.5
 
+local PLOT_PANEL_WIDTH = 260
+local PLOT_PANEL_HEIGHT = 150
+local PLOT_PANEL_GAP = 12
+local PLOTS_HEADER_POSITION = UDim2.new(0, 20, 0, 205)
+local PLOTS_HEADER_SIZE = UDim2.new(0, 260, 0, 20)
+local PLOTS_CONTAINER_POSITION = UDim2.new(0, 20, 0, 230)
+
 local REASON_MESSAGES: { [string]: string } = {
 	SeedNotFound = "Esa semilla no existe.",
 	DataNotLoaded = "Tus datos todavía se están cargando.",
 	NotEnoughCoins = "No te alcanzan las coins.",
 	NoPlot = "Todavía no tenés una parcela asignada.",
-	PlotOccupied = "Ya tenés algo plantado.",
+	PlotOccupied = "Ya tenés algo plantado ahí.",
 	SeedNotOwned = "No tenés esa semilla en el inventario.",
-	PlotEmpty = "No hay nada plantado.",
+	PlotEmpty = "No hay nada plantado ahí.",
 	NotReady = "Todavía no está lista para cosechar.",
+	InvalidSlot = "Slot de parcela inválido.",
 	ServerError = "Ocurrió un error en el servidor.",
 	InvalidRequest = "Pedido inválido.",
 }
@@ -99,18 +107,17 @@ local buySeedButton = createButton(
 	("Comprar Semilla (%d coins)"):format(Crops[BASIC_SEED_ID].Price)
 )
 
-local plotFrame = Instance.new("Frame")
-plotFrame.Name = "PlotPanel"
-plotFrame.Position = UDim2.new(0, 20, 0, 210)
-plotFrame.Size = UDim2.new(0, 260, 0, 150)
-plotFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-plotFrame.BackgroundTransparency = 0.2
-plotFrame.Parent = screenGui
+local plotsHeaderLabel = createLabel(screenGui, "PlotsHeader", PLOTS_HEADER_POSITION, PLOTS_HEADER_SIZE, "Parcelas")
+plotsHeaderLabel.BackgroundTransparency = 1
+plotsHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-createLabel(plotFrame, "Title", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 30), "Parcela")
-local plotStatusLabel = createLabel(plotFrame, "PlotStatusLabel", UDim2.new(0, 0, 0, 32), UDim2.new(1, 0, 0, 40), "Cargando...")
-local plantButton = createButton(plotFrame, "PlantButton", UDim2.new(0, 10, 0, 76), UDim2.new(1, -20, 0, 32), "Plantar Semilla")
-local harvestButton = createButton(plotFrame, "HarvestButton", UDim2.new(0, 10, 0, 112), UDim2.new(1, -20, 0, 32), "Cosechar")
+local plotsContainer = Instance.new("Frame")
+plotsContainer.Name = "PlotsContainer"
+plotsContainer.Position = PLOTS_CONTAINER_POSITION
+plotsContainer.Size = UDim2.new(0, PLOT_PANEL_WIDTH, 0, 0)
+plotsContainer.AutomaticSize = Enum.AutomaticSize.Y
+plotsContainer.BackgroundTransparency = 1
+plotsContainer.Parent = screenGui
 
 -- === Estado / feedback ===
 
@@ -128,6 +135,88 @@ local function describeReason(reason: string?): string
 	return (reason and REASON_MESSAGES[reason]) or "No se pudo completar la acción."
 end
 
+-- === Parcelas dinámicas (una por slot: Economy.BASE_PLOT_SLOTS + bonus de ExtraPlotSlots) ===
+
+local fetchState -- forward declaration: los handlers de los slots la necesitan.
+
+type SlotPanel = {
+	Frame: Frame,
+	StatusLabel: TextLabel,
+	PlantButton: TextButton,
+	HarvestButton: TextButton,
+}
+
+local slotPanels: { [number]: SlotPanel } = {}
+local currentSlotCount = 0
+
+local function requestPlantSeed(slotIndex: number)
+	local ok, result = pcall(function()
+		return plantSeedRemote:InvokeServer(BASIC_SEED_ID, slotIndex)
+	end)
+
+	showStatus(ok and result.Success and "¡Semilla plantada!" or describeReason(ok and result.Reason))
+	fetchState()
+end
+
+local function requestHarvest(slotIndex: number)
+	local ok, result = pcall(function()
+		return harvestRemote:InvokeServer(slotIndex)
+	end)
+
+	showStatus(ok and result.Success and "¡Cosecha exitosa!" or describeReason(ok and result.Reason))
+	fetchState()
+end
+
+local function createSlotPanel(slotIndex: number): SlotPanel
+	local frame = Instance.new("Frame")
+	frame.Name = ("PlotPanel%d"):format(slotIndex)
+	frame.Position = UDim2.new(0, 0, 0, (slotIndex - 1) * (PLOT_PANEL_HEIGHT + PLOT_PANEL_GAP))
+	frame.Size = UDim2.new(0, PLOT_PANEL_WIDTH, 0, PLOT_PANEL_HEIGHT)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	frame.BackgroundTransparency = 0.2
+	frame.Parent = plotsContainer
+
+	createLabel(frame, "Title", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 30), ("Parcela %d"):format(slotIndex))
+	local slotStatusLabel = createLabel(frame, "PlotStatusLabel", UDim2.new(0, 0, 0, 32), UDim2.new(1, 0, 0, 40), "Cargando...")
+	local plantButton = createButton(frame, "PlantButton", UDim2.new(0, 10, 0, 76), UDim2.new(1, -20, 0, 32), "Plantar Semilla")
+	local harvestButton = createButton(frame, "HarvestButton", UDim2.new(0, 10, 0, 112), UDim2.new(1, -20, 0, 32), "Cosechar")
+
+	plantButton.MouseButton1Click:Connect(function()
+		requestPlantSeed(slotIndex)
+	end)
+
+	harvestButton.MouseButton1Click:Connect(function()
+		requestHarvest(slotIndex)
+	end)
+
+	return {
+		Frame = frame,
+		StatusLabel = slotStatusLabel,
+		PlantButton = plantButton,
+		HarvestButton = harvestButton,
+	}
+end
+
+-- Reconstruye los paneles de parcela si la cantidad de slots cambió (ej. el
+-- jugador compró ExtraPlotSlots a mitad de sesión). No hace nada si ya
+-- coincide, para no destruir/recrear la UI en cada poll.
+local function ensureSlotPanels(maxSlots: number)
+	if maxSlots == currentSlotCount then
+		return
+	end
+
+	for _, panel in ipairs(slotPanels) do
+		panel.Frame:Destroy()
+	end
+	table.clear(slotPanels)
+
+	for slotIndex = 1, maxSlots do
+		slotPanels[slotIndex] = createSlotPanel(slotIndex)
+	end
+
+	currentSlotCount = maxSlots
+end
+
 local function refreshUI(state)
 	if not state then
 		return
@@ -136,27 +225,34 @@ local function refreshUI(state)
 	coinsLabel.Text = ("Coins: %d"):format(state.Coins)
 	inventoryLabel.Text = ("Semillas: %d"):format(state.Inventory[BASIC_SEED_ID] or 0)
 
-	local plot = state.Plot
 	if not state.HasPlot then
-		plotStatusLabel.Text = "Sin parcela asignada."
-		plantButton.Visible = false
-		harvestButton.Visible = false
-	elseif not plot then
-		plotStatusLabel.Text = "Parcela vacía."
-		plantButton.Visible = true
-		harvestButton.Visible = false
-	elseif plot.IsReady then
-		plotStatusLabel.Text = "¡Lista para cosechar!"
-		plantButton.Visible = false
-		harvestButton.Visible = true
-	else
-		plotStatusLabel.Text = ("Creciendo... %ds restantes"):format(plot.RemainingSeconds)
-		plantButton.Visible = false
-		harvestButton.Visible = false
+		plotsHeaderLabel.Text = "Sin parcela asignada."
+		ensureSlotPanels(0)
+		return
+	end
+
+	plotsHeaderLabel.Text = ("Parcelas (%d)"):format(state.MaxPlotSlots)
+	ensureSlotPanels(state.MaxPlotSlots)
+
+	for slotIndex, panel in ipairs(slotPanels) do
+		local plot = state.Plots[slotIndex]
+		if not plot then
+			panel.StatusLabel.Text = "Parcela vacía."
+			panel.PlantButton.Visible = true
+			panel.HarvestButton.Visible = false
+		elseif plot.IsReady then
+			panel.StatusLabel.Text = "¡Lista para cosechar!"
+			panel.PlantButton.Visible = false
+			panel.HarvestButton.Visible = true
+		else
+			panel.StatusLabel.Text = ("Creciendo... %ds restantes"):format(plot.RemainingSeconds)
+			panel.PlantButton.Visible = false
+			panel.HarvestButton.Visible = false
+		end
 	end
 end
 
-local function fetchState()
+fetchState = function()
 	local ok, state = pcall(function()
 		return getPlayerStateRemote:InvokeServer()
 	end)
@@ -176,24 +272,6 @@ buySeedButton.MouseButton1Click:Connect(function()
 	end)
 
 	showStatus(ok and result.Success and "¡Semilla comprada!" or describeReason(ok and result.Reason))
-	fetchState()
-end)
-
-plantButton.MouseButton1Click:Connect(function()
-	local ok, result = pcall(function()
-		return plantSeedRemote:InvokeServer(BASIC_SEED_ID)
-	end)
-
-	showStatus(ok and result.Success and "¡Semilla plantada!" or describeReason(ok and result.Reason))
-	fetchState()
-end)
-
-harvestButton.MouseButton1Click:Connect(function()
-	local ok, result = pcall(function()
-		return harvestRemote:InvokeServer()
-	end)
-
-	showStatus(ok and result.Success and "¡Cosecha exitosa!" or describeReason(ok and result.Reason))
 	fetchState()
 end)
 

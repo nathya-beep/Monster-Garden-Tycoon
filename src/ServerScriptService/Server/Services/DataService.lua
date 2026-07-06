@@ -17,7 +17,7 @@ export type PlantedCrop = {
 export type PlayerData = {
 	Coins: number,
 	Inventory: { [string]: number },
-	Plot: PlantedCrop?, -- nil = parcela vacía, sin nada plantado
+	Plots: { [number]: PlantedCrop }, -- slot index (1..N) -> cultivo plantado; slot ausente = vacío
 }
 
 local PLAYER_DATA_STORE_NAME = "PlayerData_v1"
@@ -42,8 +42,18 @@ local function getDefaultData(): PlayerData
 	return {
 		Coins = Economy.STARTING_COINS,
 		Inventory = { BasicSeed = 0 },
-		Plot = nil,
+		Plots = {},
 	}
+end
+
+-- Migra el esquema viejo (una sola parcela en data.Plot) al nuevo
+-- (data.Plots, múltiples slots para soportar el gamepass ExtraPlotSlots).
+-- Sin esto, los saves de antes de este cambio perderían su cultivo plantado.
+local function migrateLegacyPlot(data: { [string]: any })
+	if data.Plot ~= nil and data.Plots == nil then
+		data.Plots = { [1] = data.Plot }
+	end
+	data.Plot = nil
 end
 
 -- Combina los datos guardados con la plantilla por defecto: si al jugador
@@ -124,6 +134,7 @@ function DataService.Load(player: Player): PlayerData
 	end
 
 	local data = (savedData :: { [string]: any }?) or {}
+	migrateLegacyPlot(data)
 	fillMissingFields(data, getDefaultData())
 
 	cache[userId] = data :: PlayerData

@@ -6,7 +6,7 @@
 -- Comandos:
 --   !coins <cantidad>  -> suma coins
 --   !seed <cantidad>   -> suma BasicSeed al inventario
---   !reset             -> vuelve Coins/Inventory/Plot a los valores por defecto
+--   !reset             -> vuelve Coins/Inventory/Plots a los valores por defecto
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -61,7 +61,7 @@ local function handleResetCommand(player: Player)
 
 	data.Coins = Economy.STARTING_COINS
 	data.Inventory = { BasicSeed = 0 }
-	data.Plot = nil
+	data.Plots = {}
 end
 
 local function onPlayerChatted(player: Player, message: string)

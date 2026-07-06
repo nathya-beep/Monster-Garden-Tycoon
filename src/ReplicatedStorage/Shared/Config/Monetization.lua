@@ -6,6 +6,8 @@
 
 export type GamePassDefinition = {
 	AssetId: number,
+	BonusSlots: number?, -- solo en ExtraPlotSlots: cuántos slots de plantado extra otorga
+	CoinBonusPercent: number?, -- solo en VipGarden: % extra de coins en cada cosecha
 }
 
 export type DeveloperProductDefinition = {
@@ -16,11 +18,11 @@ export type DeveloperProductDefinition = {
 local Monetization = {}
 
 Monetization.GamePasses: { [string]: GamePassDefinition } = {
-	VipGarden = { AssetId = 0 },
+	VipGarden = { AssetId = 0, CoinBonusPercent = 10 },
 	DoubleCoins = { AssetId = 0 },
 	DoubleGrowthSpeed = { AssetId = 0 },
 	AutoCollect = { AssetId = 0 },
-	ExtraPlotSlots = { AssetId = 0 },
+	ExtraPlotSlots = { AssetId = 0, BonusSlots = 2 },
 }
 
 Monetization.DeveloperProducts: { [string]: DeveloperProductDefinition } = {
