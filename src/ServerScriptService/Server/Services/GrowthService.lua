@@ -3,6 +3,7 @@
 -- Usa os.time() (no GetServerTimeNow) para que el tiempo de crecimiento
 -- sobreviva a un restart del servidor entre sesiones del jugador.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Crops = require(ReplicatedStorage.Shared.Config.Crops)
@@ -11,6 +12,9 @@ local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local PlotService = require(script.Parent.PlotService)
 local InventoryService = require(script.Parent.InventoryService)
+local MonetizationService = require(script.Parent.MonetizationService)
+
+local AUTO_COLLECT_INTERVAL_SECONDS = 5
 
 export type ActionResult = {
 	Success: boolean,
@@ -110,10 +114,34 @@ local function handleHarvest(player: Player): ActionResult
 		return { Success = false, Reason = "NotReady" }
 	end
 
+	local reward = crop.HarvestReward
+	if MonetizationService.HasGamePass(player, "DoubleCoins") then
+		reward *= 2
+	end
+
 	data.Plot = nil
-	EconomyService.AddCoins(player, crop.HarvestReward)
+	EconomyService.AddCoins(player, reward)
 
 	return { Success = true }
+end
+
+-- Cosecha automática para dueños del gamepass "AutoCollect": revisa
+-- periódicamente si la parcela del jugador está lista y la cosecha sola,
+-- reusando la misma validación que el harvest manual (nunca asume que la
+-- parcela sigue lista al momento de ejecutar).
+local function startAutoCollectLoop(player: Player)
+	task.spawn(function()
+		while player.Parent do
+			task.wait(AUTO_COLLECT_INTERVAL_SECONDS)
+			if not player.Parent then
+				break
+			end
+
+			if MonetizationService.HasGamePass(player, "AutoCollect") then
+				pcall(handleHarvest, player)
+			end
+		end
+	end)
 end
 
 local function handleGetPlayerState(player: Player): PlayerStateView?
@@ -167,6 +195,12 @@ function GrowthService.Init()
 		end
 
 		return result
+	end
+
+	Players.PlayerAdded:Connect(startAutoCollectLoop)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		startAutoCollectLoop(player)
 	end
 end
 
