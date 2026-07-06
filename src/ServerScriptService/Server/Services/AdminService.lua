@@ -1,7 +1,7 @@
 -- AdminService.lua
--- Comandos de prueba por chat, SOLO disponibles en Studio (Play Solo /
--- Team Test). Nunca se conectan en un servidor real, así que no hace
--- falta validar permisos de "quién puede usarlos": no existen en producción.
+-- Comandos de prueba por chat. En Studio (Play Solo / Team Test) cualquier
+-- jugador puede usarlos. Fuera de Studio, solo los UserIds de la whitelist
+-- en Config/Admins.lua pueden ejecutarlos.
 --
 -- Comandos:
 --   !coins <cantidad>  -> suma coins
@@ -12,6 +12,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Admins = require(ReplicatedStorage.Shared.Config.Admins)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -64,9 +65,17 @@ local function handleResetCommand(player: Player)
 	data.Plots = {}
 end
 
+local function isAuthorized(player: Player): boolean
+	return RunService:IsStudio() or Admins.IsAdmin(player.UserId)
+end
+
 local function onPlayerChatted(player: Player, message: string)
 	local command, argument = message:match("^!(%a+)%s*(.*)$")
 	if not command then
+		return
+	end
+
+	if not isAuthorized(player) then
 		return
 	end
 
@@ -80,10 +89,6 @@ local function onPlayerChatted(player: Player, message: string)
 end
 
 function AdminService.Init()
-	if not RunService:IsStudio() then
-		return
-	end
-
 	Players.PlayerAdded:Connect(function(player)
 		player.Chatted:Connect(function(message)
 			onPlayerChatted(player, message)
@@ -96,7 +101,7 @@ function AdminService.Init()
 		end)
 	end
 
-	print("[AdminService] Comandos admin de Studio activos (!coins, !seed, !reset).")
+	print("[AdminService] Comandos admin activos (Studio: todos | producción: whitelist en Config/Admins.lua).")
 end
 
 return AdminService
