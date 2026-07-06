@@ -10,6 +10,7 @@ local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local PlotService = require(script.Parent.PlotService)
+local InventoryService = require(script.Parent.InventoryService)
 
 export type ActionResult = {
 	Success: boolean,
@@ -76,11 +77,11 @@ local function handlePlantSeed(player: Player, seedId: string): ActionResult
 		return { Success = false, Reason = "PlotOccupied" }
 	end
 
-	if (data.Inventory[seedId] or 0) <= 0 then
+	if not InventoryService.HasItem(player, seedId) then
 		return { Success = false, Reason = "SeedNotOwned" }
 	end
 
-	data.Inventory[seedId] -= 1
+	InventoryService.RemoveItem(player, seedId, 1)
 	data.Plot = { SeedId = seedId, PlantedAt = os.time() }
 
 	return { Success = true }
@@ -123,7 +124,7 @@ local function handleGetPlayerState(player: Player): PlayerStateView?
 
 	return {
 		Coins = data.Coins,
-		Inventory = data.Inventory,
+		Inventory = InventoryService.GetSnapshot(player),
 		HasPlot = PlotService.GetPlot(player) ~= nil,
 		Plot = GrowthService.GetPlotState(player),
 	}

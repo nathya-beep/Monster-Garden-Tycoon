@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local InventoryService = require(script.Parent.InventoryService)
 
 local AdminService = {}
 
@@ -43,13 +44,12 @@ local function handleSeedCommand(player: Player, argument: string?)
 		return
 	end
 
-	local data = DataService.Get(player)
-	if not data then
+	if not DataService.Get(player) then
 		warn(("[AdminService] Datos de %s todavía no cargaron."):format(player.Name))
 		return
 	end
 
-	data.Inventory.BasicSeed = (data.Inventory.BasicSeed or 0) + amount
+	InventoryService.AddItem(player, "BasicSeed", amount)
 end
 
 local function handleResetCommand(player: Player)

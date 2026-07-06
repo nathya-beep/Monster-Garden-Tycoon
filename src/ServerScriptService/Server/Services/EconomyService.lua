@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Crops = require(ReplicatedStorage.Shared.Config.Crops)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
+local InventoryService = require(script.Parent.InventoryService)
 
 export type BuySeedResult = {
 	Success: boolean,
@@ -58,7 +59,7 @@ local function handleBuySeed(player: Player, seedId: string): BuySeedResult
 	end
 
 	data.Coins -= crop.Price
-	data.Inventory[seedId] = (data.Inventory[seedId] or 0) + 1
+	InventoryService.AddItem(player, seedId, 1)
 
 	return { Success = true, Coins = data.Coins }
 end
