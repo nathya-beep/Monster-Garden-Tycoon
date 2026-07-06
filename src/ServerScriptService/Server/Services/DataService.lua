@@ -9,10 +9,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
+export type PlantedCrop = {
+	SeedId: string,
+	PlantedAt: number, -- os.time() en el momento de plantar; sobrevive a restarts del servidor
+}
+
 export type PlayerData = {
 	Coins: number,
-	Inventory: { BasicSeed: number },
-	Plot: any?, -- su forma exacta la define GrowthService más adelante
+	Inventory: { [string]: number },
+	Plot: PlantedCrop?, -- nil = parcela vacía, sin nada plantado
 }
 
 local PLAYER_DATA_STORE_NAME = "PlayerData_v1"

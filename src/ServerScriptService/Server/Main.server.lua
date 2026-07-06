@@ -11,6 +11,7 @@ local GrowthService = require(Services.GrowthService)
 local EconomyService = require(Services.EconomyService)
 local InventoryService = require(Services.InventoryService)
 local MonetizationService = require(Services.MonetizationService)
+local AdminService = require(Services.AdminService)
 
 print("[Main] Monster Garden Tycoon iniciando...")
 
@@ -20,5 +21,6 @@ GrowthService.Init()
 EconomyService.Init()
 InventoryService.Init()
 MonetizationService.Init()
+AdminService.Init()
 
 print("[Main] Todos los servicios inicializados.")
