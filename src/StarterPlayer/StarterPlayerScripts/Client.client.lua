@@ -10,7 +10,7 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
-local Crops = require(ReplicatedStorage.Shared.Config.Crops)
+local Seeds = require(ReplicatedStorage.Shared.Config.Seeds)
 local Theme = require(ReplicatedStorage.Shared.UI.Theme)
 local Sounds = require(ReplicatedStorage.Shared.Config.Sounds)
 
@@ -153,7 +153,7 @@ local buySeedButton = createButton(
 	"BuySeedButton",
 	UDim2.new(0, 10, 0, 64),
 	UDim2.new(1, -20, 0, 40),
-	("Comprar Semilla (%d coins)"):format(Crops[BASIC_SEED_ID].Price)
+	("Comprar Semilla (%d coins)"):format(Seeds[BASIC_SEED_ID].Price)
 )
 
 local plotsHeaderLabel = createLabel(screenGui, "PlotsHeader", PLOTS_HEADER_POSITION, PLOTS_HEADER_SIZE, "Parcelas")
