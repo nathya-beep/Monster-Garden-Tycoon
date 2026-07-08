@@ -5,7 +5,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Crops = require(ReplicatedStorage.Shared.Config.Crops)
+local Seeds = require(ReplicatedStorage.Shared.Config.Seeds)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
@@ -44,8 +44,8 @@ function EconomyService.RemoveCoins(player: Player, amount: number): boolean
 end
 
 local function handleBuySeed(player: Player, seedId: string): BuySeedResult
-	local crop = Crops[seedId]
-	if not crop then
+	local seed = Seeds[seedId]
+	if not seed then
 		return { Success = false, Reason = "SeedNotFound" }
 	end
 
@@ -54,11 +54,11 @@ local function handleBuySeed(player: Player, seedId: string): BuySeedResult
 		return { Success = false, Reason = "DataNotLoaded" }
 	end
 
-	if data.Coins < crop.Price then
+	if data.Coins < seed.Price then
 		return { Success = false, Reason = "NotEnoughCoins" }
 	end
 
-	data.Coins -= crop.Price
+	data.Coins -= seed.Price
 	InventoryService.AddItem(player, seedId, 1)
 
 	return { Success = true, Coins = data.Coins }
