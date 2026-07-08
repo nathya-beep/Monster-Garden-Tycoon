@@ -170,14 +170,30 @@ plotsContainer.Parent = screenGui
 
 -- === Estado / feedback ===
 
-local function showStatus(message: string)
+local function showStatus(message: string, kind: string?)
 	statusLabel.Text = message
+	statusLabel.TextColor3 = (kind == "Error") and Theme.Colors.Error or Theme.Colors.Success
 	statusLabel.Visible = true
 	task.delay(STATUS_MESSAGE_SECONDS, function()
 		if statusLabel.Text == message then
 			statusLabel.Visible = false
 		end
 	end)
+end
+
+local function playSound(key: string)
+	local definition = Sounds[key]
+	if not definition or definition.AssetId <= 0 then
+		return -- no configurado todavía, no rompe nada
+	end
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. definition.AssetId
+	sound.Parent = SoundService
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+	sound:Play()
 end
 
 local function describeReason(reason: string?): string
@@ -203,7 +219,14 @@ local function requestPlantSeed(slotIndex: number)
 		return plantSeedRemote:InvokeServer(BASIC_SEED_ID, slotIndex)
 	end)
 
-	showStatus(ok and result.Success and "¡Semilla plantada!" or describeReason(ok and result.Reason))
+	if ok and result.Success then
+		showStatus("¡Semilla plantada!", "Success")
+		playSound("PlantSeed")
+	else
+		showStatus(describeReason(ok and result.Reason), "Error")
+		playSound("ActionError")
+	end
+
 	fetchState()
 end
 
@@ -212,7 +235,14 @@ local function requestHarvest(slotIndex: number)
 		return harvestRemote:InvokeServer(slotIndex)
 	end)
 
-	showStatus(ok and result.Success and "¡Cosecha exitosa!" or describeReason(ok and result.Reason))
+	if ok and result.Success then
+		showStatus("¡Cosecha exitosa!", "Success")
+		playSound("HarvestSuccess")
+	else
+		showStatus(describeReason(ok and result.Reason), "Error")
+		playSound("ActionError")
+	end
+
 	fetchState()
 end
 
@@ -320,7 +350,14 @@ buySeedButton.MouseButton1Click:Connect(function()
 		return buySeedRemote:InvokeServer(BASIC_SEED_ID)
 	end)
 
-	showStatus(ok and result.Success and "¡Semilla comprada!" or describeReason(ok and result.Reason))
+	if ok and result.Success then
+		showStatus("¡Semilla comprada!", "Success")
+		playSound("BuySeed")
+	else
+		showStatus(describeReason(ok and result.Reason), "Error")
+		playSound("ActionError")
+	end
+
 	fetchState()
 end)
 
