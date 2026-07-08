@@ -264,6 +264,9 @@ function TradeService.Init()
 	local updateTradeOfferEvent = Remotes.GetUpdateTradeOfferEvent()
 	local confirmTradeEvent = Remotes.GetConfirmTradeEvent()
 	local cancelTradeEvent = Remotes.GetCancelTradeEvent()
+	-- Crear TradeStateChanged eager: el cliente hace WaitForChild al arrancar,
+	-- pero fireTradeStateChanged() solo lo pediría recién en el primer trade.
+	Remotes.GetTradeStateChangedEvent()
 
 	requestTradeEvent.OnServerEvent:Connect(function(player, targetUserId)
 		local ok, err = pcall(handleRequestTrade, player, targetUserId)
