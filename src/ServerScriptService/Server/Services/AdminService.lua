@@ -4,9 +4,10 @@
 -- en Config/Admins.lua pueden ejecutarlos.
 --
 -- Comandos:
---   !coins <cantidad>  -> suma coins
---   !seed <cantidad>   -> suma BasicSeed al inventario
---   !reset             -> vuelve Coins/Inventory/Plots a los valores por defecto
+--   !coins <cantidad>               -> suma coins
+--   !seed <cantidad>                -> suma BasicSeed al inventario
+--   !seed <seedId> <cantidad>       -> suma la semilla indicada (BasicSeed | UncommonSeed)
+--   !reset                          -> vuelve Coins/Inventory/Plots/Monsters a los valores por defecto
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -38,19 +39,28 @@ local function handleCoinsCommand(player: Player, argument: string?)
 	EconomyService.AddCoins(player, amount)
 end
 
-local function handleSeedCommand(player: Player, argument: string?)
-	local amount = parseAmount(argument)
-	if not amount then
-		warn(("[AdminService] Uso: !seed <cantidad positiva> (%s)"):format(player.Name))
-		return
-	end
+local VALID_SEED_IDS = { BasicSeed = true, UncommonSeed = true }
 
+local function handleSeedCommand(player: Player, argument: string?)
 	if not DataService.Get(player) then
 		warn(("[AdminService] Datos de %s todavía no cargaron."):format(player.Name))
 		return
 	end
 
-	InventoryService.AddItem(player, "BasicSeed", amount)
+	local seedId, amountText = (argument or ""):match("^(%a+)%s+(%d+)$")
+	if not seedId then
+		-- Uso corto "!seed <cantidad>": siempre BasicSeed.
+		seedId = "BasicSeed"
+		amountText = argument
+	end
+
+	local amount = parseAmount(amountText)
+	if not amount or not VALID_SEED_IDS[seedId] then
+		warn(("[AdminService] Uso: !seed [BasicSeed|UncommonSeed] <cantidad positiva> (%s)"):format(player.Name))
+		return
+	end
+
+	InventoryService.AddItem(player, seedId, amount)
 end
 
 local function handleResetCommand(player: Player)
@@ -63,6 +73,7 @@ local function handleResetCommand(player: Player)
 	data.Coins = Economy.STARTING_COINS
 	data.Inventory = { BasicSeed = 0 }
 	data.Plots = {}
+	data.Monsters = {}
 end
 
 local function isAuthorized(player: Player): boolean
