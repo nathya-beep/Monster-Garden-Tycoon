@@ -14,10 +14,19 @@ export type PlantedCrop = {
 	PlantedAt: number, -- os.time() en el momento de plantar; sobrevive a restarts del servidor
 }
 
+export type MonsterInstance = {
+	InstanceId: string,
+	MonsterId: string,
+	Rarity: string,
+	SellValue: number,
+	HarvestedAt: number, -- os.time() en el momento de cosechar
+}
+
 export type PlayerData = {
 	Coins: number,
 	Inventory: { [string]: number },
 	Plots: { [number]: PlantedCrop }, -- slot index (1..N) -> cultivo plantado; slot ausente = vacío
+	Monsters: { [string]: MonsterInstance }, -- instanceId -> monstruo cosechado
 }
 
 local PLAYER_DATA_STORE_NAME = "PlayerData_v1"
@@ -60,6 +69,7 @@ local function getDefaultData(): PlayerData
 		Coins = Economy.STARTING_COINS,
 		Inventory = { BasicSeed = 0 },
 		Plots = {},
+		Monsters = {},
 	}
 end
 
