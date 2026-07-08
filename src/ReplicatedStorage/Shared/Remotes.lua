@@ -44,6 +44,27 @@ local function getOrCreateRemoteFunction(name: string): RemoteFunction
 	return folder:WaitForChild(name) :: RemoteFunction
 end
 
+-- Devuelve el RemoteEvent dado, creándolo si corre en el servidor y
+-- esperándolo (WaitForChild) si corre en el cliente. Mismo patrón que
+-- getOrCreateRemoteFunction, pero para RemoteEvent (necesario para que el
+-- servidor pueda empujar actualizaciones al cliente sin que este las pida).
+local function getOrCreateRemoteEvent(name: string): RemoteEvent
+	local folder = getOrCreateFolder()
+	local existing = folder:FindFirstChild(name)
+	if existing then
+		return existing :: RemoteEvent
+	end
+
+	if RunService:IsServer() then
+		local remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = folder
+		return remote
+	end
+
+	return folder:WaitForChild(name) :: RemoteEvent
+end
+
 function Remotes.GetBuySeedRemote(): RemoteFunction
 	return getOrCreateRemoteFunction("BuySeed")
 end
@@ -58,6 +79,30 @@ end
 
 function Remotes.GetPlayerStateRemote(): RemoteFunction
 	return getOrCreateRemoteFunction("GetPlayerState")
+end
+
+function Remotes.GetRequestTradeEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("RequestTrade")
+end
+
+function Remotes.GetRespondTradeRequestEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("RespondTradeRequest")
+end
+
+function Remotes.GetUpdateTradeOfferEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("UpdateTradeOffer")
+end
+
+function Remotes.GetConfirmTradeEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("ConfirmTrade")
+end
+
+function Remotes.GetCancelTradeEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("CancelTrade")
+end
+
+function Remotes.GetTradeStateChangedEvent(): RemoteEvent
+	return getOrCreateRemoteEvent("TradeStateChanged")
 end
 
 return Remotes
