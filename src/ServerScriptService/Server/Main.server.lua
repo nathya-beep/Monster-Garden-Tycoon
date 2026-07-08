@@ -7,6 +7,7 @@ local Services = ServerScriptService.Server.Services
 
 local DataService = require(Services.DataService)
 local PlotService = require(Services.PlotService)
+local MonsterService = require(Services.MonsterService)
 local GrowthService = require(Services.GrowthService)
 local EconomyService = require(Services.EconomyService)
 local InventoryService = require(Services.InventoryService)
@@ -18,6 +19,7 @@ print("[Main] Monster Garden Tycoon iniciando...")
 
 DataService.Init()
 PlotService.Init()
+MonsterService.Init()
 GrowthService.Init()
 EconomyService.Init()
 InventoryService.Init()
