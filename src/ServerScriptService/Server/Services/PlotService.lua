@@ -53,7 +53,7 @@ local function teleportToPlot(player: Player, plot: Model)
 		return
 	end
 
-	local spawnCFrame = (spawnPoint :: any).CFrame or CFrame.new((spawnPoint :: any).Position)
+	local spawnCFrame = (spawnPoint :: any).CFrame or CFrame.new((spawnPoint :: any).Position);
 	(rootPart :: BasePart).CFrame = spawnCFrame + Vector3.new(0, 3, 0)
 end
 

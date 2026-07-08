@@ -17,7 +17,7 @@ export type DeveloperProductDefinition = {
 
 local Monetization = {}
 
-Monetization.GamePasses: { [string]: GamePassDefinition } = {
+Monetization.GamePasses = {
 	VipGarden = { AssetId = 0, CoinBonusPercent = 10 },
 	DoubleCoins = { AssetId = 0 },
 	DoubleGrowthSpeed = { AssetId = 0 },
@@ -25,7 +25,7 @@ Monetization.GamePasses: { [string]: GamePassDefinition } = {
 	ExtraPlotSlots = { AssetId = 0, BonusSlots = 2 },
 }
 
-Monetization.DeveloperProducts: { [string]: DeveloperProductDefinition } = {
+Monetization.DeveloperProducts = {
 	CoinPackSmall = { AssetId = 0, CoinAmount = 500 },
 	CoinPackMedium = { AssetId = 0, CoinAmount = 1500 },
 	CoinPackLarge = { AssetId = 0, CoinAmount = 5000 },

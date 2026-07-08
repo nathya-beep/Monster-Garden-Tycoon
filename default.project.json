@@ -17,6 +17,38 @@
       }
     },
 
+    "Workspace": {
+      "$className": "Workspace",
+      "Plots": {
+        "$className": "Folder",
+        "Plot1": {
+          "$className": "Model",
+          "$attributes": { "Owner": 0 },
+          "Ground": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "CanCollide": true,
+              "Material": "Grass",
+              "Color": [0.42, 0.71, 0.35],
+              "Size": [24, 1, 24],
+              "Position": [0, 0.5, 30]
+            }
+          },
+          "SpawnPoint": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "CanCollide": false,
+              "Transparency": 1,
+              "Size": [4, 1, 4],
+              "Position": [0, 1.5, 30]
+            }
+          }
+        }
+      }
+    },
+
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {

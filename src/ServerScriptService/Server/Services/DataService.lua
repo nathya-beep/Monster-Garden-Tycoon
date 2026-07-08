@@ -25,7 +25,24 @@ local LOAD_RETRY_ATTEMPTS = 3
 local SAVE_RETRY_ATTEMPTS = 3
 local RETRY_BACKOFF_SECONDS = 2
 
-local playerDataStore = DataStoreService:GetDataStore(PLAYER_DATA_STORE_NAME)
+-- GetDataStore() puede tirar error (no pcall-safe por sí solo) en lugares
+-- sin publicar o sin "Enable Studio Access to API Services" activado. Sin
+-- este pcall, ese error de configuración tumbaba todo Main.server.lua en
+-- cascada (require de DataService fallando) y dejaba el juego entero sin
+-- iniciar. Con esto, el juego sigue siendo jugable sin guardado persistente.
+local playerDataStore: DataStore? = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(PLAYER_DATA_STORE_NAME)
+	end)
+
+	if ok then
+		playerDataStore = result
+	else
+		warn(("[DataService] No se pudo acceder a DataStoreService (%s). Corriendo sin guardado persistente: publicá el lugar y activá 'Enable Studio Access to API Services' para probar el guardado real.")
+			:format(tostring(result)))
+	end
+end
 
 local DataService = {}
 
@@ -75,6 +92,10 @@ end
 -- ok = true y data = nil significa "jugador nuevo, sin save" (válido).
 -- ok = false significa que no se pudo determinar el estado real.
 local function loadFromDataStore(userId: number): (PlayerData?, boolean)
+	if not playerDataStore then
+		return nil, false
+	end
+
 	for attempt = 1, LOAD_RETRY_ATTEMPTS do
 		local ok, result = pcall(function()
 			return playerDataStore:GetAsync("Player_" .. userId)
@@ -96,6 +117,10 @@ local function loadFromDataStore(userId: number): (PlayerData?, boolean)
 end
 
 local function saveToDataStore(userId: number, data: PlayerData): boolean
+	if not playerDataStore then
+		return false
+	end
+
 	for attempt = 1, SAVE_RETRY_ATTEMPTS do
 		local ok, err = pcall(function()
 			playerDataStore:UpdateAsync("Player_" .. userId, function()
