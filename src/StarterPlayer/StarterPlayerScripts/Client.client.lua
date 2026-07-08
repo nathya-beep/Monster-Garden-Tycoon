@@ -6,9 +6,13 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Crops = require(ReplicatedStorage.Shared.Config.Crops)
+local Theme = require(ReplicatedStorage.Shared.UI.Theme)
+local Sounds = require(ReplicatedStorage.Shared.Config.Sounds)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -56,13 +60,23 @@ local function createLabel(parent: Instance, name: string, position: UDim2, size
 	label.Name = name
 	label.Position = position
 	label.Size = size
-	label.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	label.BackgroundTransparency = 0.3
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.BackgroundColor3 = Theme.Colors.Panel
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = Theme.Colors.Text
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
 	label.Text = text
 	label.Parent = parent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = Theme.CornerRadius
+	corner.Parent = label
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Theme.StrokeColor
+	stroke.Transparency = Theme.StrokeTransparency
+	stroke.Parent = label
+
 	return label
 end
 
@@ -71,13 +85,49 @@ local function createButton(parent: Instance, name: string, position: UDim2, siz
 	button.Name = name
 	button.Position = position
 	button.Size = size
-	button.BackgroundColor3 = Color3.fromRGB(60, 140, 60)
+	button.BackgroundColor3 = Theme.Colors.PanelAccent
 	button.TextColor3 = Color3.fromRGB(255, 255, 255)
 	button.Font = Enum.Font.GothamBold
 	button.TextScaled = true
 	button.Text = text
-	button.AutoButtonColor = true
+	button.AutoButtonColor = false
 	button.Parent = parent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = Theme.CornerRadius
+	corner.Parent = button
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Theme.StrokeColor
+	stroke.Transparency = Theme.StrokeTransparency
+	stroke.Parent = button
+
+	local baseSize = size
+	local hoverTweenInfo = TweenInfo.new(Theme.HoverTweenSeconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, hoverTweenInfo, { BackgroundColor3 = Theme.Colors.PanelAccentHover }):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, hoverTweenInfo, { BackgroundColor3 = Theme.Colors.PanelAccent }):Play()
+	end)
+
+	button.MouseButton1Down:Connect(function()
+		TweenService:Create(button, hoverTweenInfo, {
+			Size = UDim2.new(
+				baseSize.X.Scale,
+				baseSize.X.Offset * Theme.PressScale,
+				baseSize.Y.Scale,
+				baseSize.Y.Offset * Theme.PressScale
+			),
+		}):Play()
+	end)
+
+	button.MouseButton1Up:Connect(function()
+		TweenService:Create(button, hoverTweenInfo, { Size = baseSize }):Play()
+	end)
+
 	return button
 end
 
@@ -86,7 +136,6 @@ local coinsLabel = createLabel(screenGui, "CoinsLabel", UDim2.new(0, 20, 0, 20),
 local statusLabel = createLabel(screenGui, "StatusLabel", UDim2.new(0.5, -200, 0, 20), UDim2.new(0, 400, 0, 40), "")
 statusLabel.AnchorPoint = Vector2.new(0.5, 0)
 statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(255, 230, 120)
 statusLabel.Visible = false
 
 local shopFrame = Instance.new("Frame")
