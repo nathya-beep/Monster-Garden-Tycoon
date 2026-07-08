@@ -6,7 +6,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Crops = require(ReplicatedStorage.Shared.Config.Crops)
+local Seeds = require(ReplicatedStorage.Shared.Config.Seeds)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Monetization = require(ReplicatedStorage.Shared.Config.Monetization)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
@@ -15,12 +15,14 @@ local EconomyService = require(script.Parent.EconomyService)
 local PlotService = require(script.Parent.PlotService)
 local InventoryService = require(script.Parent.InventoryService)
 local MonetizationService = require(script.Parent.MonetizationService)
+local MonsterService = require(script.Parent.MonsterService)
 
 local AUTO_COLLECT_INTERVAL_SECONDS = 5
 
 export type ActionResult = {
 	Success: boolean,
 	Reason: string?,
+	Monster: MonsterService.MonsterInstance?, -- presente solo en un harvest exitoso con roll de monstruo
 }
 
 export type PlotStateView = {
@@ -54,11 +56,11 @@ end
 -- del gamepass "DoubleGrowthSpeed". Único lugar donde vive esta cuenta para
 -- que GetSlotState (cuenta regresiva de la UI) y handleHarvest (validación
 -- de "todavía no está lista") nunca puedan desincronizarse entre sí.
-local function getEffectiveGrowSeconds(player: Player, crop: Crops.CropDefinition): number
+local function getEffectiveGrowSeconds(player: Player, seed: Seeds.SeedDefinition): number
 	if MonetizationService.HasGamePass(player, "DoubleGrowthSpeed") then
-		return crop.GrowSeconds / 2
+		return seed.GrowSeconds / 2
 	end
-	return crop.GrowSeconds
+	return seed.GrowSeconds
 end
 
 -- Snapshot de solo lectura del estado del slot `slotIndex`, para que la UI
@@ -74,12 +76,12 @@ function GrowthService.GetSlotState(player: Player, slotIndex: number): PlotStat
 		return nil
 	end
 
-	local crop = Crops[plantedCrop.SeedId]
-	if not crop then
+	local seed = Seeds[plantedCrop.SeedId]
+	if not seed then
 		return nil
 	end
 
-	local effectiveGrowSeconds = getEffectiveGrowSeconds(player, crop)
+	local effectiveGrowSeconds = getEffectiveGrowSeconds(player, seed)
 	local elapsedSeconds = os.time() - plantedCrop.PlantedAt
 	local remainingSeconds = math.max(effectiveGrowSeconds - elapsedSeconds, 0)
 
@@ -92,8 +94,8 @@ function GrowthService.GetSlotState(player: Player, slotIndex: number): PlotStat
 end
 
 local function handlePlantSeed(player: Player, seedId: string, slotIndex: number): ActionResult
-	local crop = Crops[seedId]
-	if not crop then
+	local seed = Seeds[seedId]
+	if not seed then
 		return { Success = false, Reason = "SeedNotFound" }
 	end
 
@@ -139,19 +141,19 @@ local function handleHarvest(player: Player, slotIndex: number): ActionResult
 		return { Success = false, Reason = "PlotEmpty" }
 	end
 
-	local crop = Crops[plantedCrop.SeedId]
-	if not crop then
+	local seed = Seeds[plantedCrop.SeedId]
+	if not seed then
 		-- Config borrada/renombrada después de que alguien ya la plantó.
 		data.Plots[slotIndex] = nil
 		return { Success = false, Reason = "SeedNotFound" }
 	end
 
 	local elapsedSeconds = os.time() - plantedCrop.PlantedAt
-	if elapsedSeconds < getEffectiveGrowSeconds(player, crop) then
+	if elapsedSeconds < getEffectiveGrowSeconds(player, seed) then
 		return { Success = false, Reason = "NotReady" }
 	end
 
-	local reward = crop.HarvestReward
+	local reward = seed.HarvestCoins
 	if MonetizationService.HasGamePass(player, "DoubleCoins") then
 		reward *= 2
 	end
@@ -164,7 +166,15 @@ local function handleHarvest(player: Player, slotIndex: number): ActionResult
 	data.Plots[slotIndex] = nil
 	EconomyService.AddCoins(player, reward)
 
-	return { Success = true }
+	local monster: MonsterService.MonsterInstance? = nil
+	local monsterId = MonsterService.RollMonster(seed.Id)
+	if monsterId then
+		monster = MonsterService.GrantMonster(player, monsterId)
+	else
+		warn(("[GrowthService] %s no otorgó monstruo a %s al cosechar: MonsterTable vacía/corrupta."):format(seed.Id, player.Name))
+	end
+
+	return { Success = true, Monster = monster }
 end
 
 -- Cosecha automática para dueños del gamepass "AutoCollect": revisa
